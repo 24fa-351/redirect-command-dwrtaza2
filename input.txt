@@ -1,0 +1,2 @@
+"Hello world, today is going to be good."
+"helo world today is going to be amazing."
