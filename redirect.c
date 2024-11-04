@@ -1,55 +1,77 @@
-#include "redirect.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+#include <stdbool.h>
 
-// Split cmd into arguments
-char **split_command(const char *cmd) {
-    char **args = malloc(MAX_ARGS * sizeof(char *));
-    char *cmd_copy = strdup(cmd);  
-    char *token;
-    int i = 0;
 
-    token = strtok(cmd_copy, " ");
-    while (token != NULL && i < MAX_ARGS - 1) {
-        args[i++] = strdup(token);  // Store each argument
-        token = strtok(NULL, " ");
+void add_char_to_string(char *str, char c){
+    int len = strlen(str);
+    str[len] = c;
+    str[len + 1] = '\0';
+}
+void split(char *cmd, char *words[], char delim){
+    int word_count = 0;
+    char *next_char = cmd;
+    char current_word[1004];
+    strcpy(current_word, "");
+    
+    while (*next_char != '\0'){
+        if (*next_char == delim){
+            words[word_count++] = strdup(current_word);
+            strcpy(current_word, "");
+        }
+        else{
+            add_char_to_string(current_word, *next_char);
+        }
+        ++next_char;
     }
-    args[i] = NULL; 
-    free(cmd_copy);
-    return args;
+    words[word_count++] = strdup(current_word);
+    words[word_count] = NULL;
 }
 
+//true == found
+bool get_abs_path(char *cmd, char abs_path[]){
 
-void execute_redir(const char *inp, const char *cmd, const char *out) {
-    char **args = split_command(cmd);
+    char *directory[1000];
+    split(getenv("PATH"), directory, ':');
 
-    pid_t pid = fork();
-    if (pid < 0) {
-        perror("fork failed");
-        exit(EXIT_FAILURE);
+    for (int i = 0; directory[i]!= NULL; i++ )
+    {
+        char path[1004];
+        strcpy(path, directory[i]);
+        add_char_to_string(path, '/');
+        strcat(path, cmd);
+        if (access(path, X_OK) == 0){
+            strcpy(abs_path, path);
+            return true;
+        }
     }
+    return false;
+}
+
+int main(int argc, char *argv[]){
+    char abs_path[1024];
+    char *words[1024];
     
-    if (pid == 0) {  // Child process
-        if (strcmp(inp, "-") != 0) {  // Redirect input if specified
-            int in_fd = open(inp, O_RDONLY);
-            if (in_fd < 0) { perror("Input file open failed"); exit(EXIT_FAILURE); }
-            if (dup2(in_fd, STDIN_FILENO) < 0) { perror("dup2 failed for input"); close(in_fd); exit(EXIT_FAILURE); }
-            close(in_fd);
-        }
+    split(argv[2], words, ' ');
 
-        if (strcmp(out, "-") != 0) {  // Redirect output if specified
-            int out_fd = open(out, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-            if (out_fd < 0) { perror("Output file open failed"); exit(EXIT_FAILURE); }
-            if (dup2(out_fd, STDOUT_FILENO) < 0) { perror("dup2 failed for output"); close(out_fd); exit(EXIT_FAILURE); }
-            close(out_fd);
-        }
-
-        execvp(args[0], args);  
-        perror("execvp failed");
-        exit(EXIT_FAILURE);
-    } else {
-        int status;
-        waitpid(pid, &status, 0); 
+  if(words[0]== NULL){
+        printf("No command provided\n");
+        return 1;
+    }
+    if ( !get_abs_path(words[0], abs_path)){
+        printf( "Command not found: %s\n", words[0]);
+        return 1;
     }
 
-    for (int i = 0; args[i] != NULL; i++) free(args[i]);  // Clean up args
-    free(args);
+    for (int i = 0; words[i] != NULL; i++){
+        printf("words[%d] = %s\n", i, words[i]);
+    }
+    printf("abs_path = %s\n", abs_path);
+
+    execve(abs_path, words, NULL);
+    printf("Failed to execute \n");
+    return 1;
+
 }

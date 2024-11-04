@@ -1,2 +1,2 @@
 #/bin/bash
-gcc -o redir main.c redirect.c
+gcc -o redir.exe redirect.c
